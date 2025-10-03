@@ -1,7 +1,7 @@
 from fastapi_utilities import repeat_every, repeat_at
 from fastapi import FastAPI, Query as FQuery
-from model import Project, Event, HeartBeat
-from db import db, get_event_by_id, get_project_by_id
+from model import Project, Event, HeartBeat, NewHeartBeat
+from db import db, get_event_by_id, get_project_by_id, add_heart_beat
 from tinydb import Query
 from response import BoolResponse, EventResponse, EventsResponse, ProjectsResponse, ProjectResponse, IntResponse, Response,  ErrorMessage, to_response, ErrorResponse, ListResponse
 from uuid import uuid4
@@ -12,7 +12,7 @@ from queries import set_event_ongoing_status, get_expired_events
 from contextlib import asynccontextmanager
 
 from config import logger, iteration
-
+from wakatime import fetch_wakatime
 # --- Start Up Code --
 
 
@@ -35,11 +35,12 @@ async def minute_loop():
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    cron_iter = 0
-    # Startup event
-    logger.info("Application startup initiated.")
     # Perform startup tasks here
-    logger.info("Database connection established.")
+    logger.info("Starting...")
+
+    # Fetch Custom Histories
+    # await fetch_wakatime_history()
+
     await minute_loop()
     yield
     # Shutdown event
@@ -87,7 +88,7 @@ async def new_project(project: Project) -> ProjectResponse | ErrorResponse:
         project.uuid = str(uuid4())
     try:
         db.insert(project.model_dump())
-        return project
+        return ProjectResponse(content=project)
     except Exception as e:
         return to_response(ErrorMessage.server_error, str(e))
 
@@ -117,7 +118,7 @@ async def new_event(uuid: str, events: List[Event]) -> ListResponse:
             {e.uuid: e.model_dump(mode="json")}), Query().uuid == uuid)
         count += len(items)
 
-    return IntResponse(
+    return ListResponse(
         content=output,
         message=f"Added {count} events to project's ({uuid}) events"
     )
@@ -145,13 +146,9 @@ async def stop_event(uuid: str) -> BoolResponse:
     return BoolResponse(content=len(status) > 0, message="whether stopped event")
 
 
-@ app.get("/events/{uuid}/hbt")
-async def heart_beat(uuid: str, value: str) -> int:
-    print(db.search(Query().events.any(Query().uuid == uuid)))
-    items = db.update(lambda p: p["events"][uuid]["segements"].append(
-        HeartBeat(value=value).model_dump(mode="json")), Query().events[uuid].exists())
-
-    return len(items)
+@ app.post("/events/{uuid}/hbt")
+async def heart_beat(uuid: str, heart: NewHeartBeat) -> int:
+    return add_heart_beat(uuid, heart.into())
 
 
 @ app.get("/")

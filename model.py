@@ -9,10 +9,18 @@ from pydantic import field_serializer
 
 class HeartBeat(BaseModel):
     # Different Things Happen in Event
-    value: str
+    category: str
+    location: str
+    content: str
+
     time: datetime = Field(default_factory=datetime.utcnow)
 
-    # Example: Shift At McDonalds Cashier
+
+class NewHeartBeat(HeartBeat):
+    time: None
+
+    def into(self) -> HeartBeat:
+        return HeartBeat(**dict(self.model_dump() | {"time": datetime.now(timezone.utc).replace(tzinfo=None)}))
 
 
 class Event(BaseModel):
