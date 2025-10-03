@@ -3,11 +3,12 @@ import requests
 import json
 from fastapi_utilities import repeat_every
 from dotenv import load_dotenv
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pydantic import BaseModel
-from model import HeartBeat
-from typing import List
-from db import db, get_project_by_id
+from model import HeartBeat, HeartBeatLocation, Project, Event
+from config import logger
+from typing import List, Optional
+from db import db, get_project_by_id, get_event_by_title
 from tinydb import Query
 load_dotenv(".env")
 
@@ -22,25 +23,40 @@ headers = {
 
 
 class WakatimeHeartBeat(BaseModel):
-    branch: str
+    branch: Optional[str] = None  #
     category: str  # category
-    project: str
-    language: str
+    project: str  # event
+    language: Optional[str] = None
     entity: str
     time: float
 
+    def event_title(self) -> str:
+        output = self.project
+
+        if self.branch:
+            output += f"-{self.branch}"
+
+        return output
+
     def into(self) -> HeartBeat:
-        pass
+        return HeartBeat(
+            category=self.category,
+            location=HeartBeatLocation(),
+            time=datetime.fromtimestamp(self.time, timezone.utc),
+            content={
+                "project": self.project,
+                "branch": self.branch,
+                "entity": self.entity,
+                "language": self.language
+            }
 
 
-def dt_sort(dates: List[str, datetime]) -> List[datetime]:
-    # event uuid: last one
-    return []
+
+        )
 
 
-@repeat_every(seconds=90)  # every 90 secondsds
 async def fetch_wakatime():
-
+    logger.info("[WAKATIME] Refreshing after 90 seconds")
     # Event: (project) + (branch)
 
     url = f"{base_url}/users/current/heartbeats?date={datetime.strftime('%Y-%m-%d')}"
@@ -56,14 +72,28 @@ async def fetch_wakatime():
 
         if wakatime_project is None:
             # TODO create wakatime project here
-            pass
+            db.insert(Project(
+                uuid="wakatime",
+                title="Wakatime",
+                icon="https://wakatime.com/favicon.ico",
+                content="Wakatime Dashboard"
+            ).model_dump(mode="json"))
 
-        lasts = {v.uuid: v.end_time()
+        lasts = {v.title: v.end_time()
                  for v in wakatime_project.events.values()}
 
+        now = datetime.utcnow().replace(tzinfo=None)
         for raw in data:
+
+            # check for all the keys
             hbt = WakatimeHeartBeat(raw)
             tm = datetime.fromtimestamp(hbt)
+            hbt_title = hbt.event_title()
+
+            if lasts.get(hbt_title) is None or tm > lasts[hbt_title]:
+                # set the latest to the current time
+                lasts[hbt_title] = tm
+                # add event
 
     except requests.exceptions.RequestException as e:
         print(f"Error fetching data: {e}")

@@ -9,7 +9,10 @@ def add_project(project: Project) -> bool:
 
 
 def add_event(project_uuid: str, event: Event) -> bool:
-    pass
+    items = len(db.update(lambda p: p["events"].update(
+        {event.uuid: event.model_dump(mode="json")}), Query().uuid == project_uuid))
+
+    return items > 0
 
 
 def add_heart_beat(uuid: str, heart: HeartBeat) -> int:
@@ -29,6 +32,15 @@ def get_event_by_id(id: str) -> Optional[Event]:
     if len(res) > 0:
         return Event(**res[0]["events"][id])
 
+    return None
+
+
+def get_event_by_title(title: str) -> Optional[Event]:
+    res = db.search(Query().events.any(Query().title == title))
+    if len(res) > 0:
+        for event in res[0].values():
+            if event["title"] == title:
+                return Event(**event)
     return None
 
 

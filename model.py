@@ -7,11 +7,17 @@ from enum import Enum
 from pydantic import field_serializer
 
 
+class HeartBeatLocation(BaseModel):
+    file: Optional[str] = None
+    url: Optional[str] = None
+    coordinates: Optional[dict[str, float]] = None
+
+
 class HeartBeat(BaseModel):
     # Different Things Happen in Event
     category: str
     location: str
-    content: str
+    content: dict[str, Optional[str]]
 
     time: datetime = Field(default_factory=datetime.utcnow)
 
@@ -29,7 +35,6 @@ class Event(BaseModel):
     title: Optional[str] = None
     icon: Optional[str] = None
     content: Optional[str] = None
-
     # ALWAYS HAS AT LEAST ONCE
     segements: List[HeartBeat] = Field(..., min_length=1)
     ongoing: bool = False
@@ -52,7 +57,7 @@ class Project(BaseModel):
     uuid: Optional[str] = None
 
     title: str
-    icon: Optional[AnyHttpUrl] = None
+    icon: Optional[str] = None
     # Markdown -- Rendered on Server
     content: Optional[str] = None
 
